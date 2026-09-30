@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF → Markdown → Word</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://unpkg.com/docx@8.2.4/build/index.umd.js"></script>
+<style>
+  :root{
+    --bg:#F5F5F7;
+    --surface:#FFFFFF;
+    --surface-alt:#FAFAFA;
+    --ink:#1D1D1F;
+    --ink-soft:#6E6E73;
+    --divider:#E3E3E6;
+    --accent:#A6192E;
+    --accent-hover:#8A1526;
+    --accent-soft:#A6192E12;
+    --accent-soft-strong:#A6192E1F;
+    --gold:#C9A227;
+    --success:#2F7D52;
+    --error:#B65C3D;
+    --shadow:0 1px 2px rgba(0,0,0,.045), 0 10px 30px rgba(0,0,0,.06);
+    --font-serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --font-sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;
+    --font-mono:'JetBrains Mono','SF Mono','SFMono-Regular',Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-sans);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+  }
+  .masthead{
+    padding:3.4rem 2rem 2.2rem;
+    max-width:1180px;
+    width:100%;
+    margin:0 auto;
+    text-align:center;
+  }
+  .badge{
+    display:inline-flex;
+    align-items:center;
+    gap:.4rem;
+    padding:.32rem .8rem;
+    border-radius:999px;
+    background:var(--accent-soft);
+    color:var(--accent);
+    font-size:.72rem;
+    font-weight:600;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    margin-bottom:1.1rem;
+  }
+  .badge::before{
+    content:'';
+    width:6px; height:6px; border-radius:50%;
+    background:var(--accent);
+  }
+  .masthead h1{
+    font-family:var(--font-serif);
+    font-weight:600;
+    font-size:clamp(1.7rem,3.6vw,2.7rem);
+    letter-spacing:-0.02em;
+    margin:0 0 .7rem;
+    color:var(--ink);
+  }
+  .masthead .arrow{ color:var(--accent); }
+  .tagline{
+    margin:0 auto;
+    color:var(--ink-soft);
+    font-size:1.05rem;
+    max-width:50ch;
+    line-height:1.55;
+  }
+  .workspace{
+    flex:1;
+    display:flex;
+    gap:1.5rem;
+    max-width:1180px;
+    width:100%;
+    margin:0 auto 3rem;
+    padding:0 2rem;
+    align-items:stretch;
+  }
+  .card{
+    background:var(--surface);
+    border-radius:20px;
+    box-shadow:var(--shadow);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    overflow:hidden;
+  }
+  .card-upload{
+    flex:0 0 40%;
+    padding:1.7rem 1.7rem 1.5rem;
+    gap:1.1rem;
+    height:700px;
+  }
+  .card-output{
+    flex:1;
+    min-width:0;
+    height:700px;
+  }
+
+  /* Dropzone */
+  .dropzone{
+    border:1.5px dashed var(--divider);
+    border-radius:16px;
+    padding:1.4rem 1.2rem;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .18s ease, background .18s ease;
+    background:var(--surface-alt);
+    flex:0 0 auto;
+  }
+  .dropzone:hover, .dropzone:focus-visible{
+    border-color:var(--accent);
+    background:var(--accent-soft);
+    outline:none;
+  }
+  .dropzone.dragover{
+    border-color:var(--accent);
+    background:var(--accent-soft-strong);
+  }
+  .dropzone svg{ color:var(--ink-soft); margin-bottom:.5rem; }
+  .drop-title{ margin:0 0 .15rem; font-weight:600; font-size:.96rem; color:var(--ink); }
+  .drop-sub{ margin:0; color:var(--ink-soft); font-size:.83rem; }
+
+  /* Format segmented control */
+  .format-row{ flex:0 0 auto; }
+  .format-label{ margin:0 0 .5rem; font-size:.72rem; letter-spacing:.07em; color:var(--ink-soft); text-transform:uppercase; font-weight:600; }
+  .segmented{
+    display:inline-flex;
+    background:var(--surface-alt);
+    border:1px solid var(--divider);
+    border-radius:999px;
+    padding:3px;
+    width:100%;
+  }
+  .segmented button{
+    flex:1;
+    border:none;
+    background:transparent;
+    padding:.48rem .8rem;
+    border-radius:999px;
+    font-size:.83rem;
+    font-weight:600;
+    color:var(--ink-soft);
+    transition:background .15s ease, color .15s ease;
+  }
+  .segmented button.active{ background:var(--accent); color:#fff; }
+
+  .batch-bar{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:.6rem; flex-wrap:wrap;
+  }
+  .batch-bar.hidden{ display:none; }
+  .batch-stats{ font-size:.8rem; color:var(--ink-soft); font-weight:500; }
+  .batch-actions{ display:flex; gap:.5rem; align-items:center; }
+
+  .file-list{
+    flex:1;
+    min-height:60px;
+    overflow-y:auto;
+    border:1px solid var(--divider);
+    border-radius:14px;
+    background:var(--surface-alt);
+  }
+  .file-list.hidden{ display:none; }
+  .file-row{
+    display:flex; flex-direction:column; gap:.2rem;
+    padding:.65rem .85rem;
+    border-bottom:1px solid var(--divider);
+    cursor:pointer;
+    font-size:.85rem;
+    transition:background .12s ease;
+  }
+  .file-row:last-child{ border-bottom:none; }
+  .file-row:hover{ background:#EFEFF1; }
+  .file-row.active{ background:var(--accent-soft); box-shadow:inset 3px 0 0 var(--accent); }
+  .file-row-name{ font-weight:600; word-break:break-word; color:var(--ink); }
+  .file-row-status{ color:var(--ink-soft); font-size:.76rem; display:flex; align-items:center; gap:.4rem; }
+  .file-row-status.error{ color:var(--error); }
+  .file-row-status.done{ color:var(--success); }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--ink-soft); flex:0 0 auto; }
+  .dot.busy{ background:var(--gold); animation:pulse 1s ease-in-out infinite; }
+  .dot.done{ background:var(--success); }
+  .dot.error{ background:var(--error); }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
+
+  .options{ border-top:1px solid var(--divider); padding-top:.9rem; flex:0 0 auto; }
+  .options-label{ margin:0 0 .55rem; font-size:.72rem; letter-spacing:.07em; color:var(--ink-soft); text-transform:uppercase; font-weight:600; }
+  .options-label .soft{ text-transform:none; letter-spacing:0; font-weight:400; }
+  .option{
+    display:flex; align-items:center; gap:.6rem;
+    font-size:.87rem; margin-bottom:.5rem; cursor:pointer;
+    color:var(--ink);
+  }
+  .option input{ accent-color:var(--accent); width:16px; height:16px; }
+
+  /* Buttons — pill style */
+  button{ font-family:var(--font-sans); cursor:pointer; }
+  .btn-ghost, .btn-accent, .btn-ghost-light{
+    font-size:.82rem;
+    font-weight:600;
+    padding:.5rem 1.05rem;
+    border-radius:999px;
+    border:1px solid transparent;
+    transition:background .15s ease, opacity .15s ease, border-color .15s ease;
+    white-space:nowrap;
+  }
+  .btn-ghost{
+    background:var(--surface-alt);
+    color:var(--ink);
+    border-color:var(--divider);
+  }
+  .btn-ghost:hover:not(:disabled){ background:#EFEFF1; }
+  .btn-ghost-light{
+    background:transparent;
+    color:var(--ink-soft);
+    border-color:var(--divider);
+  }
+  .btn-ghost-light:hover:not(:disabled){ background:var(--surface-alt); color:var(--ink); }
+  .btn-accent{
+    background:var(--accent);
+    color:#fff;
+  }
+  .btn-accent:hover:not(:disabled){ background:var(--accent-hover); }
+  button:disabled{ opacity:.4; cursor:not-allowed; }
+
+  /* Output card */
+  .terminal-toolbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:1rem 1.4rem;
+    border-bottom:1px solid var(--divider);
+    flex-wrap:wrap; gap:.6rem;
+  }
+  .current-file{ min-width:0; }
+  .current-file-name{
+    font-family:var(--font-mono); font-size:.83rem; color:var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:320px;
+    font-weight:500;
+  }
+  .stats{
+    font-family:var(--font-mono);
+    font-size:.72rem;
+    color:var(--ink-soft);
+  }
+  .toolbar-actions{ display:flex; gap:.5rem; flex:0 0 auto; }
+
+  .output{
+    flex:1;
+    width:100%;
+    resize:none;
+    border:none;
+    outline:none;
+    background:var(--surface-alt);
+    color:var(--ink);
+    font-family:var(--font-mono);
+    font-size:.87rem;
+    line-height:1.7;
+    padding:1.4rem 1.5rem;
+    tab-size:2;
+  }
+  .output::placeholder{ color:var(--ink-soft); font-family:var(--font-sans); font-size:.95rem; }
+  .output.error-text{ color:var(--error); }
+
+  footer{
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:.8rem;
+    padding-bottom:2.2rem;
+  }
+
+  @media (max-width:900px){
+    .workspace{ flex-direction:column; padding:0 1.2rem; }
+    .card-upload, .card-output{ height:auto; }
+    .card-upload{ flex:none; }
+    .file-list{ max-height:220px; }
+    .output{ min-height:340px; }
+    .current-file-name{ max-width:160px; }
+  }
+</style>
+</head>
+<body>
+
+  <header class="masthead">
+    <span class="badge">Lokaal &amp; privé verwerkt</span>
+    <h1>PDF <span class="arrow">→</span> Markdown <span class="arrow">→</span> Word</h1>
+    <p class="tagline">Sleep één of meerdere PDF's of Markdown-bestanden hierheen, kies je uitvoerformaat. Alles gebeurt in je browser — er wordt niets geüpload naar een server.</p>
+  </header>
+
+  <main class="workspace">
+    <section class="card card-upload" aria-label="Bronbestanden">
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Bestanden uploaden, klik of sleep PDF's of Markdown-bestanden hierheen">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <p class="drop-title">Sleep PDF's of Markdown-bestanden hierheen</p>
+        <p class="drop-sub">of klik om te bladeren</p>
+        <input type="file" id="fileInput" accept=".pdf,.md,application/pdf,text/markdown" multiple hidden>
+      </div>
+
+      <div class="format-row">
+        <p class="format-label">Uitvoerformaat</p>
+        <div class="segmented" role="tablist" aria-label="Uitvoerformaat">
+          <button type="button" id="formatMdBtn" class="active">Markdown (.md)</button>
+          <button type="button" id="formatDocxBtn">Word (.docx)</button>
+        </div>
+      </div>
+
+      <div class="batch-bar hidden" id="batchBar">
+        <span class="batch-stats" id="batchStats">0 van 0 klaar</span>
+        <div class="batch-actions">
+          <button id="clearAllBtn" class="btn-ghost-light">Wis alles</button>
+          <button id="downloadAllBtn" class="btn-accent" disabled>Download alles (.zip)</button>
+        </div>
+      </div>
+
+      <div class="file-list hidden" id="fileList"></div>
+
+      <div class="options">
+        <p class="options-label">Herkenning <span class="soft">— alleen voor PDF's</span></p>
+        <label class="option"><input type="checkbox" id="optHeaders" checked> Koppen herkennen (op lettergrootte)</label>
+        <label class="option"><input type="checkbox" id="optLists" checked> Opsommingen &amp; genummerde lijsten</label>
+        <label class="option"><input type="checkbox" id="optStyle" checked> Vet/cursief overnemen waar mogelijk</label>
+        <label class="option"><input type="checkbox" id="optBreaks"> Paginascheiding invoegen (---)</label>
+      </div>
+    </section>
+
+    <section class="card card-output" aria-label="Resultaat">
+      <div class="terminal-toolbar">
+        <div class="current-file">
+          <span class="current-file-name" id="currentFileName">geen bestand geselecteerd</span>
+          <span id="statsLabel" class="stats">upload een of meer bestanden om te beginnen</span>
+        </div>
+        <div class="toolbar-actions">
+          <button id="copyBtn" class="btn-ghost" disabled>Kopiëren</button>
+          <button id="downloadBtn" class="btn-ghost" disabled>Downloaden .md</button>
+        </div>
+      </div>
+      <textarea id="output" class="output" spellcheck="false" placeholder="Hier verschijnt de Markdown zodra je een bestand hebt geüpload…"></textarea>
+    </section>
+  </main>
+
+  <footer>Voorbeeld toont altijd Markdown; bij export als Word wordt dit omgezet naar een echt .docx-document.</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const formatMdBtn = document.getElementById('formatMdBtn');
+const formatDocxBtn = document.getElementById('formatDocxBtn');
+const batchBar = document.getElementById('batchBar');
+const batchStats = document.getElementById('batchStats');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const downloadAllBtn = document.getElementById('downloadAllBtn');
+const fileListEl = document.getElementById('fileList');
+const output = document.getElementById('output');
+const statsLabel = document.getElementById('statsLabel');
+const currentFileName = document.getElementById('currentFileName');
+const copyBtn = document.getElementById('copyBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const optHeaders = document.getElementById('optHeaders');
+const optLists = document.getElementById('optLists');
+const optStyle = document.getElementById('optStyle');
+const optBreaks = document.getElementById('optBreaks');
+
+let entries = [];
+let selectedId = null;
+let idCounter = 0;
+let queueRunning = false;
+let outputFormat = 'md';
+
+// ---------- Output format ----------
+function setOutputFormat(fmt){
+  outputFormat = fmt;
+  formatMdBtn.classList.toggle('active', fmt === 'md');
+  formatDocxBtn.classList.toggle('active', fmt === 'docx');
+  downloadBtn.textContent = fmt === 'docx' ? 'Downloaden .docx' : 'Downloaden .md';
+  downloadAllBtn.textContent = fmt === 'docx' ? 'Download alles (.zip van .docx)' : 'Download alles (.zip van .md)';
+  updateStatsForOutput();
+}
+formatMdBtn.addEventListener('click', () => setOutputFormat('md'));
+formatDocxBtn.addEventListener('click', () => setOutputFormat('docx'));
+
+// ---------- Upload wiring ----------
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) handleFiles(fileInput.files);
+  fileInput.value = '';
+});
+
+clearAllBtn.addEventListener('click', () => {
+  entries = [];
+  selectedId = null;
+  fileListEl.innerHTML = '';
+  fileListEl.classList.add('hidden');
+  batchBar.classList.add('hidden');
+  output.value = '';
+  output.classList.remove('error-text');
+  currentFileName.textContent = 'geen bestand geselecteerd';
+  statsLabel.textContent = 'upload een of meer bestanden om te beginnen';
+  copyBtn.disabled = true;
+  downloadBtn.disabled = true;
+  downloadAllBtn.disabled = true;
+});
+
+[optHeaders, optLists, optStyle, optBreaks].forEach(el => {
+  el.addEventListener('change', () => {
+    const opts = currentOpts();
+    for (const entry of entries) {
+      if (entry.lines) {
+        entry.markdown = formatMarkdown(entry.lines, entry.bodySize, opts);
+        updateRowStatus(entry);
+      }
+    }
+    if (selectedId) {
+      const entry = entries.find(e => e.id === selectedId);
+      if (entry && entry.lines) { output.value = entry.markdown; updateStatsForOutput(); }
+    }
+  });
+});
+
+output.addEventListener('input', () => {
+  const entry = entries.find(e => e.id === selectedId);
+  if (entry) entry.markdown = output.value;
+  updateStatsForOutput();
+});
+
+copyBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(output.value);
+    const original = copyBtn.textContent;
+    copyBtn.textContent = 'Gekopieerd';
+    setTimeout(() => copyBtn.textContent = original, 1400);
+  } catch (err) {
+    output.select();
+    document.execCommand('copy');
+  }
+});
+
+downloadBtn.addEventListener('click', async () => {
+  const entry = entries.find(e => e.id === selectedId);
+  if (!entry) return;
+  if (outputFormat === 'docx'){
+    const original = downloadBtn.textContent;
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = 'Bezig\u2026';
+    try {
+      const blob = await markdownToDocxBlob(output.value);
+      triggerDownload(entry.baseName + '.docx', blob);
+    } catch (err){
+      console.error(err);
+    } finally {
+      downloadBtn.textContent = original;
+      downloadBtn.disabled = false;
+    }
+  } else {
+    downloadText(entry.baseName + '.md', output.value);
+  }
+});
+
+downloadAllBtn.addEventListener('click', async () => {
+  const doneEntries = entries.filter(e => e.status === 'klaar');
+  if (!doneEntries.length) return;
+  const original = downloadAllBtn.textContent;
+  downloadAllBtn.disabled = true;
+  downloadAllBtn.textContent = 'Bezig met zippen\u2026';
+  try {
+    const zip = new JSZip();
+    const usedNames = new Set();
+    const ext = outputFormat === 'docx' ? '.docx' : '.md';
+    for (const entry of doneEntries) {
+      let name = entry.baseName + ext;
+      let i = 1;
+      while (usedNames.has(name)) { name = entry.baseName + '-' + (i++) + ext; }
+      usedNames.add(name);
+      if (outputFormat === 'docx'){
+        const blob = await markdownToDocxBlob(entry.markdown);
+        zip.file(name, blob);
+      } else {
+        zip.file(name, entry.markdown);
+      }
+    }
+    const blob = await zip.generateAsync({ type: 'blob' });
+    triggerDownload(outputFormat === 'docx' ? 'word-documenten.zip' : 'markdown-bestanden.zip', blob);
+  } catch (err){
+    console.error(err);
+  } finally {
+    downloadAllBtn.textContent = original;
+    downloadAllBtn.disabled = false;
+  }
+});
+
+function triggerDownload(filename, blob){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadText(filename, text){
+  triggerDownload(filename, new Blob([text], { type: 'text/markdown;charset=utf-8' }));
+}
+
+function currentOpts(){
+  return {
+    headers: optHeaders.checked,
+    lists: optLists.checked,
+    style: optStyle.checked,
+    breaks: optBreaks.checked
+  };
+}
+
+function formatBytes(bytes){
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024*1024) return (bytes/1024).toFixed(0) + ' KB';
+  return (bytes/(1024*1024)).toFixed(1) + ' MB';
+}
+
+function wordCount(text){
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
+function updateStatsForOutput(){
+  const text = output.value;
+  const words = wordCount(text);
+  const chars = text.length;
+  let label = words + ' woorden \u00b7 ' + chars + ' tekens';
+  if (outputFormat === 'docx' && text.trim()) label += ' \u00b7 exporteert als .docx';
+  statsLabel.textContent = label;
+  const hasContent = text.trim().length > 0;
+  copyBtn.disabled = !hasContent;
+  downloadBtn.disabled = !hasContent || !selectedId;
+}
+
+// ---------- Batch handling ----------
+function handleFiles(fileList){
+  const files = Array.from(fileList).filter(f => {
+    const lower = f.name.toLowerCase();
+    return f.type === 'application/pdf' || lower.endsWith('.pdf') || lower.endsWith('.md') || f.type === 'text/markdown';
+  });
+  if (!files.length) return;
+
+  batchBar.classList.remove('hidden');
+  fileListEl.classList.remove('hidden');
+
+  for (const file of files){
+    const id = 'f' + (idCounter++);
+    const isMarkdown = file.name.toLowerCase().endsWith('.md');
+    const entry = {
+      id, file,
+      name: file.name,
+      baseName: file.name.replace(/\.(pdf|md)$/i, ''),
+      size: file.size,
+      isMarkdown,
+      status: 'wachten',
+      lines: null,
+      bodySize: 12,
+      markdown: '',
+      error: null
+    };
+    entries.push(entry);
+    addFileRow(entry);
+  }
+  updateBatchStats();
+  processQueue();
+}
+
+function addFileRow(entry){
+  const row = document.createElement('div');
+  row.className = 'file-row';
+  row.id = 'row-' + entry.id;
+
+  const nameEl = document.createElement('div');
+  nameEl.className = 'file-row-name';
+  nameEl.textContent = entry.name;
+
+  const statusEl = document.createElement('div');
+  statusEl.className = 'file-row-status';
+  statusEl.id = 'status-' + entry.id;
+
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.id = 'dot-' + entry.id;
+
+  const label = document.createElement('span');
+  label.id = 'label-' + entry.id;
+  label.textContent = 'wachten\u2026';
+
+  statusEl.appendChild(dot);
+  statusEl.appendChild(label);
+  row.appendChild(nameEl);
+  row.appendChild(statusEl);
+
+  row.addEventListener('click', () => selectEntry(entry.id));
+  fileListEl.appendChild(row);
+}
+
+function setRowLabel(entry, text, kind){
+  const label = document.getElementById('label-' + entry.id);
+  const dot = document.getElementById('dot-' + entry.id);
+  const statusEl = document.getElementById('status-' + entry.id);
+  if (label) label.textContent = text;
+  if (dot) dot.className = 'dot' + (kind ? ' ' + kind : '');
+  if (statusEl) statusEl.className = 'file-row-status' + (kind === 'error' ? ' error' : kind === 'done' ? ' done' : '');
+}
+
+function updateRowStatus(entry){
+  if (entry.status === 'klaar') setRowLabel(entry, 'klaar \u00b7 ' + wordCount(entry.markdown) + ' woorden', 'done');
+}
+
+function updateBatchStats(){
+  const total = entries.length;
+  const done = entries.filter(e => e.status === 'klaar').length;
+  batchStats.textContent = done + ' van ' + total + ' klaar';
+  downloadAllBtn.disabled = done === 0;
+}
+
+function selectEntry(id){
+  selectedId = id;
+  document.querySelectorAll('.file-row').forEach(r => r.classList.remove('active'));
+  const row = document.getElementById('row-' + id);
+  if (row) row.classList.add('active');
+
+  const entry = entries.find(e => e.id === id);
+  if (!entry) return;
+  currentFileName.textContent = entry.name;
+
+  if (entry.status === 'klaar'){
+    output.classList.remove('error-text');
+    output.value = entry.markdown;
+  } else if (entry.status === 'fout'){
+    output.classList.add('error-text');
+    output.value = entry.error || 'Kon dit bestand niet verwerken.';
+  } else {
+    output.classList.remove('error-text');
+    output.value = '';
+  }
+  updateStatsForOutput();
+}
+
+let queue = [];
+async function processQueue(){
+  queue = entries.filter(e => e.status === 'wachten');
+  if (queueRunning) return;
+  queueRunning = true;
+  while (queue.length){
+    const entry = queue.shift();
+    await processEntry(entry);
+    updateBatchStats();
+  }
+  queueRunning = false;
+}
+
+async function processEntry(entry){
+  entry.status = 'bezig';
+  setRowLabel(entry, 'bezig\u2026', 'busy');
+
+  try {
+    if (entry.isMarkdown){
+      const text = await entry.file.text();
+      entry.markdown = text.trim() + '\n';
+      entry.lines = null;
+      entry.status = 'klaar';
+      setRowLabel(entry, 'klaar \u00b7 ' + wordCount(entry.markdown) + ' woorden', 'done');
+      if (!selectedId) selectEntry(entry.id);
+      else if (selectedId === entry.id) selectEntry(entry.id);
+      return;
+    }
+
+    const buffer = await entry.file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+    const { lines, bodySize, hasText } = await extractLines(pdf, (done, total) => {
+      setRowLabel(entry, 'pagina ' + done + '/' + total, 'busy');
+    });
+
+    if (!hasText){
+      entry.status = 'fout';
+      entry.error = 'Geen tekstlaag gevonden. Waarschijnlijk een scan (afbeelding); deze tool leest alleen digitale tekst, geen OCR.';
+      setRowLabel(entry, 'fout \u00b7 geen tekstlaag', 'error');
+      if (selectedId === entry.id) selectEntry(entry.id);
+      return;
+    }
+
+    entry.lines = lines;
+    entry.bodySize = bodySize;
+    entry.markdown = formatMarkdown(lines, bodySize, currentOpts());
+    entry.status = 'klaar';
+    setRowLabel(entry, 'klaar \u00b7 ' + wordCount(entry.markdown) + ' woorden', 'done');
+
+    if (!selectedId) selectEntry(entry.id);
+    else if (selectedId === entry.id) selectEntry(entry.id);
+  } catch (err){
+    console.error(err);
+    entry.status = 'fout';
+    entry.error = entry.isMarkdown
+      ? 'Kon dit Markdown-bestand niet lezen.'
+      : 'Kon de PDF niet lezen. Mogelijk beveiligd met een wachtwoord of beschadigd.';
+    setRowLabel(entry, 'fout \u00b7 kon niet lezen', 'error');
+    if (selectedId === entry.id) selectEntry(entry.id);
+  }
+}
+
+// ---------- PDF text extraction ----------
+async function extractLines(pdf, onProgress){
+  const allLines = [];
+  let hasText = false;
+
+  for (let p = 1; p <= pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const items = content.items.filter(it => it.str !== undefined);
+
+    const lineGroups = [];
+    for (const item of items){
+      if (!item.str.trim()) continue;
+      hasText = true;
+      const y = item.transform[5];
+      const fontSize = Math.hypot(item.transform[2], item.transform[3]) || 1;
+      let group = lineGroups.find(g => Math.abs(g.y - y) < fontSize * 0.4);
+      if (!group){ group = { y, items: [] }; lineGroups.push(group); }
+      group.items.push({ ...item, fontSize });
+    }
+
+    lineGroups.sort((a,b) => b.y - a.y);
+
+    let prevY = null;
+    for (const group of lineGroups){
+      const lineItems = group.items.sort((a,b) => a.transform[4] - b.transform[4]);
+      let text = '';
+      let prevEndX = null;
+      for (const it of lineItems){
+        const fname = (it.fontName || '').toLowerCase();
+        const bold = fname.includes('bold');
+        const italic = fname.includes('italic') || fname.includes('oblique');
+        let seg = it.str;
+        if (prevEndX !== null){
+          const gap = it.transform[4] - prevEndX;
+          if (gap > it.fontSize * 0.2 && !/\s$/.test(text) && !/^\s/.test(seg)) text += ' ';
+        }
+        const trimmed = seg.trim();
+        if (trimmed){
+          const lead = seg.match(/^\s*/)[0];
+          const trail = seg.match(/\s*$/)[0];
+          let wrapped = trimmed;
+          if (bold && italic) wrapped = '***' + trimmed + '***';
+          else if (bold) wrapped = '**' + trimmed + '**';
+          else if (italic) wrapped = '*' + trimmed + '*';
+          seg = lead + wrapped + trail;
+        }
+        text += seg;
+        prevEndX = it.transform[4] + (it.width || 0);
+      }
+      const maxFont = Math.max(...lineItems.map(i => i.fontSize));
+      const gap = prevY !== null ? prevY - group.y : 0;
+      allLines.push({ page: p, text: text.trim(), fontSize: maxFont, gap });
+      prevY = group.y;
+    }
+
+    onProgress(p, pdf.numPages);
+    await new Promise(r => setTimeout(r, 0));
+  }
+
+  const sizeCounts = {};
+  for (const l of allLines){
+    const r = Math.round(l.fontSize);
+    sizeCounts[r] = (sizeCounts[r] || 0) + 1;
+  }
+  const bodySize = Number(Object.entries(sizeCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || 12);
+
+  return { lines: allLines, bodySize, hasText };
+}
+
+// ---------- Markdown formatting (from PDF lines) ----------
+function formatMarkdown(lines, bodySize, opts){
+  let md = '';
+  let buffer = [];
+  let lastPage = null;
+
+  const flush = () => {
+    if (buffer.length){
+      md += buffer.join(' ').replace(/[ \t]+/g,' ').trim() + '\n\n';
+      buffer = [];
+    }
+  };
+
+  for (const line of lines){
+    if (opts.breaks && lastPage !== null && line.page !== lastPage){
+      flush();
+      md += '---\n\n';
+    }
+    lastPage = line.page;
+    if (!line.text) continue;
+
+    let text = line.text;
+    if (!opts.style) text = text.replace(/\*+/g, '');
+
+    const ratio = line.fontSize / bodySize;
+    const bulletMatch = text.match(/^[\u2022\u25CF\u25AA\u2023\u25CBo]\s+(.*)/);
+    const numberedMatch = text.match(/^(\d{1,3})[\.\)]\s+(.*)/);
+
+    if (opts.headers && ratio > 1.15 && text.length < 140 && !bulletMatch){
+      flush();
+      const level = ratio > 1.6 ? 1 : ratio > 1.35 ? 2 : 3;
+      md += '#'.repeat(level) + ' ' + text.replace(/\*+/g,'') + '\n\n';
+    } else if (opts.lists && bulletMatch){
+      flush();
+      md += '- ' + bulletMatch[1] + '\n';
+    } else if (opts.lists && numberedMatch){
+      flush();
+      md += numberedMatch[1] + '. ' + numberedMatch[2] + '\n';
+    } else {
+      if (buffer.length && line.gap > line.fontSize * 1.3) flush();
+      buffer.push(text);
+    }
+  }
+  flush();
+
+  return md.trim() + '\n';
+}
+
+// ---------- Markdown -> Word (.docx) ----------
+function parseInlineRuns(text){
+  const runs = [];
+  const regex = /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*)/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = regex.exec(text)) !== null){
+    if (match.index > lastIndex){
+      runs.push(new docx.TextRun(text.slice(lastIndex, match.index)));
+    }
+    if (match[2] !== undefined){
+      runs.push(new docx.TextRun({ text: match[2], bold: true, italics: true }));
+    } else if (match[3] !== undefined){
+      runs.push(new docx.TextRun({ text: match[3], bold: true }));
+    } else if (match[4] !== undefined){
+      runs.push(new docx.TextRun({ text: match[4], italics: true }));
+    }
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length){
+    runs.push(new docx.TextRun(text.slice(lastIndex)));
+  }
+  if (!runs.length) runs.push(new docx.TextRun(text));
+  return runs;
+}
+
+function markdownToDocxParagraphs(markdown){
+  const paragraphs = [];
+  const headingLevels = [
+    docx.HeadingLevel.HEADING_1, docx.HeadingLevel.HEADING_2, docx.HeadingLevel.HEADING_3,
+    docx.HeadingLevel.HEADING_4, docx.HeadingLevel.HEADING_5, docx.HeadingLevel.HEADING_6
+  ];
+  const blocks = markdown.replace(/\r\n/g, '\n').split(/\n{2,}/);
+
+  for (const rawBlock of blocks){
+    const block = rawBlock.trim();
+    if (!block) continue;
+
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(block)){
+      paragraphs.push(new docx.Paragraph({
+        border: { bottom: { color: 'CCCCCC', space: 1, style: docx.BorderStyle.SINGLE, size: 6 } },
+        spacing: { after: 200 }
+      }));
+      continue;
+    }
+
+    const headingMatch = block.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch){
+      const level = headingMatch[1].length;
+      paragraphs.push(new docx.Paragraph({
+        heading: headingLevels[level - 1],
+        children: parseInlineRuns(headingMatch[2].trim().replace(/\*+/g, '')),
+        spacing: { before: 240, after: 120 }
+      }));
+      continue;
+    }
+
+    const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+    const isBulletBlock = lines.length && lines.every(l => /^[-*+]\s+/.test(l));
+    const isNumberedBlock = lines.length && lines.every(l => /^\d+[\.\)]\s+/.test(l));
+
+    if (isBulletBlock){
+      for (const line of lines){
+        const content = line.replace(/^[-*+]\s+/, '');
+        paragraphs.push(new docx.Paragraph({
+          bullet: { level: 0 },
+          children: parseInlineRuns(content),
+          spacing: { after: 80 }
+        }));
+      }
+      continue;
+    }
+
+    if (isNumberedBlock){
+      for (const line of lines){
+        const m = line.match(/^(\d+)[\.\)]\s+(.*)$/);
+        paragraphs.push(new docx.Paragraph({
+          children: [new docx.TextRun(m[1] + '. '), ...parseInlineRuns(m[2])],
+          indent: { left: 360 },
+          spacing: { after: 80 }
+        }));
+      }
+      continue;
+    }
+
+    const joined = lines.join(' ');
+    paragraphs.push(new docx.Paragraph({
+      children: parseInlineRuns(joined),
+      spacing: { after: 200 }
+    }));
+  }
+
+  if (!paragraphs.length){
+    paragraphs.push(new docx.Paragraph({ children: [new docx.TextRun('')] }));
+  }
+  return paragraphs;
+}
+
+async function markdownToDocxBlob(markdown){
+  const paragraphs = markdownToDocxParagraphs(markdown || '');
+  const doc = new docx.Document({ sections: [{ children: paragraphs }] });
+  return await docx.Packer.toBlob(doc);
+}
+</script>
+</body>
+</html>
