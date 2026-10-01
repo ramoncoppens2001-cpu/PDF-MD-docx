@@ -6,83 +6,110 @@
 <title>PDF → Markdown → Word</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://unpkg.com/docx@8.2.4/build/index.umd.js"></script>
 <style>
+  /* ---------------------------------------------------------------
+     Savills brand tokens (Global Brand Guidelines v1, jan 2024 +
+     PowerBI Guidelines 2024). Primair: Savills yellow + navy.
+     Ondersteunend: cream / navy-tinten. Eén secundair accent: green.
+     Geel wordt nooit getint (brandregel) — alleen 100%.
+     --------------------------------------------------------------- */
   :root{
-    --bg:#F5F5F7;
+    --yellow:#FFDF00;          /* Savills yellow, PMS 108C */
+    --navy:#25273A;            /* Savills navy, PMS 533C */
+    --navy-70:#696975;
+    --navy-50:#93949E;
+    --navy-20:#D2D2D6;
+    --navy-10:#E8E8EB;
+    --cream:#EEE8E3;           /* supporting cream */
+    --cream-50:#F5F2F0;        /* cream 50% — achtergrond */
+    --menu-main:#F8F7F5;       /* PowerBI 'Menu Main' */
+    --menu-2:#FBFAF9;          /* PowerBI 'Menu 2' */
     --surface:#FFFFFF;
-    --surface-alt:#FAFAFA;
-    --ink:#1D1D1F;
-    --ink-soft:#6E6E73;
-    --divider:#E3E3E6;
-    --accent:#A6192E;
-    --accent-hover:#8A1526;
-    --accent-soft:#A6192E12;
-    --accent-soft-strong:#A6192E1F;
-    --gold:#C9A227;
-    --success:#2F7D52;
-    --error:#B65C3D;
-    --shadow:0 1px 2px rgba(0,0,0,.045), 0 10px 30px rgba(0,0,0,.06);
-    --font-serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
-    --font-sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Helvetica Neue',Helvetica,Arial,sans-serif;
+    --red:#CE181E;             /* supporting red — spaarzaam, alleen fouten */
+    --green:#3AA95C;           /* secundair accent (PowerBI actief-filter) */
+
+    --bg:var(--cream-50);
+    --ink:var(--navy);
+    --ink-soft:var(--navy-70);
+    --divider:var(--navy-10);
+
+    --shadow:0 1px 2px rgba(37,39,58,.05), 0 12px 32px rgba(37,39,58,.07);
+    /* Gotham is het corporate font; als het lokaal geïnstalleerd is wordt het gebruikt.
+       Montserrat is de webvervanger, Arial de officiële Office-vervanger. */
+    --font-sans:'Gotham','Gotham SSm','Montserrat',Arial,Helvetica,sans-serif;
     --font-mono:'JetBrains Mono','SF Mono','SFMono-Regular',Consolas,monospace;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
+  ::selection{ background:var(--yellow); color:var(--navy); }
   body{
     background:var(--bg);
     color:var(--ink);
     font-family:var(--font-sans);
+    font-size:15px;
     min-height:100vh;
     display:flex;
     flex-direction:column;
     -webkit-font-smoothing:antialiased;
   }
+  :focus-visible{ outline:2px solid var(--navy); outline-offset:2px; }
+
+  /* ---------- Masthead ---------- */
   .masthead{
-    padding:3.4rem 2rem 2.2rem;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:3rem;
+    padding:3.6rem 2rem 2.4rem;
     max-width:1180px;
     width:100%;
     margin:0 auto;
-    text-align:center;
   }
-  .badge{
-    display:inline-flex;
-    align-items:center;
-    gap:.4rem;
-    padding:.32rem .8rem;
-    border-radius:999px;
-    background:var(--accent-soft);
-    color:var(--accent);
-    font-size:.72rem;
-    font-weight:600;
-    letter-spacing:.06em;
+  .masthead-text{ max-width:640px; }
+  /* Type highlight (brand §09): rechthoekig, uitgelijnd op de headline */
+  .highlight{
+    display:inline-block;
+    padding:.34rem .6rem .3rem;
+    background:var(--yellow);
+    color:var(--navy);
+    font-size:.68rem;
+    font-weight:500;
+    letter-spacing:.14em;
     text-transform:uppercase;
-    margin-bottom:1.1rem;
-  }
-  .badge::before{
-    content:'';
-    width:6px; height:6px; border-radius:50%;
-    background:var(--accent);
+    margin-bottom:1.15rem;
   }
   .masthead h1{
-    font-family:var(--font-serif);
-    font-weight:600;
-    font-size:clamp(1.7rem,3.6vw,2.7rem);
-    letter-spacing:-0.02em;
-    margin:0 0 .7rem;
-    color:var(--ink);
+    font-weight:300;           /* Gotham Light-headline, sentence case */
+    font-size:clamp(2rem,4.4vw,3.25rem);
+    line-height:1.08;
+    letter-spacing:-0.015em;
+    margin:0 0 .85rem;
+    color:var(--navy);
   }
-  .masthead .arrow{ color:var(--accent); }
+  .masthead .arrow{ color:var(--navy-50); }
   .tagline{
-    margin:0 auto;
+    margin:0;
     color:var(--ink-soft);
-    font-size:1.05rem;
-    max-width:50ch;
-    line-height:1.55;
+    font-size:.98rem;
+    max-width:56ch;
+    line-height:1.65;
   }
+  /* Square grid (brand §08): vast 4×4, alleen in primaire kleuren, min. 105px digitaal */
+  .square-grid{
+    flex:0 0 auto;
+    display:grid;
+    grid-template-columns:repeat(4,10px);
+    grid-template-rows:repeat(4,10px);
+    gap:40px;
+    margin:0 .5rem .5rem 0;
+  }
+  .square-grid span{ background:var(--yellow); }
+
+  /* ---------- Werkruimte ---------- */
   .workspace{
     flex:1;
     display:flex;
@@ -105,7 +132,7 @@
   .card-upload{
     flex:0 0 40%;
     padding:1.7rem 1.7rem 1.5rem;
-    gap:1.1rem;
+    gap:1.15rem;
     height:700px;
   }
   .card-output{
@@ -116,35 +143,41 @@
 
   /* Dropzone */
   .dropzone{
-    border:1.5px dashed var(--divider);
+    border:1.5px dashed var(--navy-20);
     border-radius:16px;
-    padding:1.4rem 1.2rem;
+    padding:1.5rem 1.2rem;
     text-align:center;
     cursor:pointer;
     transition:border-color .18s ease, background .18s ease;
-    background:var(--surface-alt);
+    background:var(--menu-2);
     flex:0 0 auto;
   }
   .dropzone:hover, .dropzone:focus-visible{
-    border-color:var(--accent);
-    background:var(--accent-soft);
+    border-color:var(--navy);
+    background:var(--cream-50);
     outline:none;
   }
   .dropzone.dragover{
-    border-color:var(--accent);
-    background:var(--accent-soft-strong);
+    border-color:var(--navy);
+    border-style:solid;
+    background:var(--cream);
   }
-  .dropzone svg{ color:var(--ink-soft); margin-bottom:.5rem; }
-  .drop-title{ margin:0 0 .15rem; font-weight:600; font-size:.96rem; color:var(--ink); }
-  .drop-sub{ margin:0; color:var(--ink-soft); font-size:.83rem; }
+  .dropzone svg{ color:var(--navy); margin-bottom:.55rem; }
+  .drop-title{ margin:0 0 .2rem; font-weight:500; font-size:.92rem; color:var(--ink); }
+  .drop-sub{ margin:0; color:var(--ink-soft); font-size:.8rem; }
 
-  /* Format segmented control */
+  /* Segmented control */
   .format-row{ flex:0 0 auto; }
-  .format-label{ margin:0 0 .5rem; font-size:.72rem; letter-spacing:.07em; color:var(--ink-soft); text-transform:uppercase; font-weight:600; }
+  .format-label, .options-label{
+    margin:0 0 .55rem;
+    font-size:.78rem;
+    color:var(--ink);
+    font-weight:500;
+  }
+  .options-label .soft{ font-weight:400; color:var(--ink-soft); }
   .segmented{
     display:inline-flex;
-    background:var(--surface-alt);
-    border:1px solid var(--divider);
+    background:var(--cream-50);
     border-radius:999px;
     padding:3px;
     width:100%;
@@ -153,108 +186,112 @@
     flex:1;
     border:none;
     background:transparent;
-    padding:.48rem .8rem;
+    padding:.5rem .8rem;
     border-radius:999px;
-    font-size:.83rem;
-    font-weight:600;
+    font-size:.8rem;
+    font-weight:500;
     color:var(--ink-soft);
     transition:background .15s ease, color .15s ease;
   }
-  .segmented button.active{ background:var(--accent); color:#fff; }
+  .segmented button:hover:not(.active){ color:var(--navy); }
+  .segmented button.active{ background:var(--navy); color:#fff; box-shadow:0 1px 3px rgba(37,39,58,.25); }
 
   .batch-bar{
     display:flex; align-items:center; justify-content:space-between;
     gap:.6rem; flex-wrap:wrap;
   }
   .batch-bar.hidden{ display:none; }
-  .batch-stats{ font-size:.8rem; color:var(--ink-soft); font-weight:500; }
+  .batch-stats{ font-size:.78rem; color:var(--ink-soft); font-weight:500; }
   .batch-actions{ display:flex; gap:.5rem; align-items:center; }
 
+  /* Bestandslijst */
   .file-list{
     flex:1;
     min-height:60px;
     overflow-y:auto;
     border:1px solid var(--divider);
     border-radius:14px;
-    background:var(--surface-alt);
+    background:var(--menu-2);
   }
   .file-list.hidden{ display:none; }
   .file-row{
-    display:flex; flex-direction:column; gap:.2rem;
-    padding:.65rem .85rem;
+    display:flex; flex-direction:column; gap:.22rem;
+    padding:.7rem .9rem .7rem 1rem;
     border-bottom:1px solid var(--divider);
     cursor:pointer;
-    font-size:.85rem;
+    font-size:.82rem;
     transition:background .12s ease;
   }
   .file-row:last-child{ border-bottom:none; }
-  .file-row:hover{ background:#EFEFF1; }
-  .file-row.active{ background:var(--accent-soft); box-shadow:inset 3px 0 0 var(--accent); }
-  .file-row-name{ font-weight:600; word-break:break-word; color:var(--ink); }
-  .file-row-status{ color:var(--ink-soft); font-size:.76rem; display:flex; align-items:center; gap:.4rem; }
-  .file-row-status.error{ color:var(--error); }
-  .file-row-status.done{ color:var(--success); }
-  .dot{ width:6px; height:6px; border-radius:50%; background:var(--ink-soft); flex:0 0 auto; }
-  .dot.busy{ background:var(--gold); animation:pulse 1s ease-in-out infinite; }
-  .dot.done{ background:var(--success); }
-  .dot.error{ background:var(--error); }
-  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
+  .file-row:hover{ background:var(--cream-50); }
+  /* Actieve rij: gele balk links, zoals de KPI-kaarten in de PowerBI-richtlijnen */
+  .file-row.active{ background:var(--cream-50); box-shadow:inset 4px 0 0 var(--yellow); }
+  .file-row-name{ font-weight:500; word-break:break-word; color:var(--ink); }
+  .file-row-status{ color:var(--ink-soft); font-size:.74rem; display:flex; align-items:center; gap:.45rem; }
+  .file-row-status.error{ color:var(--red); }
+  .dot{ width:7px; height:7px; border-radius:50%; background:var(--navy-20); flex:0 0 auto; }
+  .dot.busy{ background:var(--yellow); box-shadow:0 0 0 1px rgba(37,39,58,.3); animation:pulse 1s ease-in-out infinite; }
+  .dot.done{ background:var(--green); }
+  .dot.error{ background:var(--red); }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
 
-  .options{ border-top:1px solid var(--divider); padding-top:.9rem; flex:0 0 auto; }
-  .options-label{ margin:0 0 .55rem; font-size:.72rem; letter-spacing:.07em; color:var(--ink-soft); text-transform:uppercase; font-weight:600; }
-  .options-label .soft{ text-transform:none; letter-spacing:0; font-weight:400; }
+  /* Opties */
+  .options{ border-top:1px solid var(--divider); padding-top:1rem; flex:0 0 auto; }
   .option{
     display:flex; align-items:center; gap:.6rem;
-    font-size:.87rem; margin-bottom:.5rem; cursor:pointer;
+    font-size:.84rem; margin-bottom:.5rem; cursor:pointer;
     color:var(--ink);
   }
-  .option input{ accent-color:var(--accent); width:16px; height:16px; }
+  .option input{ accent-color:var(--navy); width:16px; height:16px; }
 
-  /* Buttons — pill style */
+  /* Knoppen — pill-vorm (Apple), kleuren uit het primaire palet */
   button{ font-family:var(--font-sans); cursor:pointer; }
   .btn-ghost, .btn-accent, .btn-ghost-light{
-    font-size:.82rem;
-    font-weight:600;
-    padding:.5rem 1.05rem;
+    font-size:.78rem;
+    font-weight:500;
+    padding:.52rem 1.1rem;
     border-radius:999px;
     border:1px solid transparent;
-    transition:background .15s ease, opacity .15s ease, border-color .15s ease;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
     white-space:nowrap;
   }
   .btn-ghost{
-    background:var(--surface-alt);
-    color:var(--ink);
-    border-color:var(--divider);
+    background:var(--surface);
+    color:var(--navy);
+    border-color:var(--navy-20);
   }
-  .btn-ghost:hover:not(:disabled){ background:#EFEFF1; }
+  .btn-ghost:hover:not(:disabled){ border-color:var(--navy); }
   .btn-ghost-light{
     background:transparent;
     color:var(--ink-soft);
-    border-color:var(--divider);
+    border-color:transparent;
   }
-  .btn-ghost-light:hover:not(:disabled){ background:var(--surface-alt); color:var(--ink); }
+  .btn-ghost-light:hover:not(:disabled){ background:var(--cream-50); color:var(--navy); }
+  /* Primaire actie: Savills yellow met navy tekst (zoals 'Apply Selection' / 'Enter' in PowerBI) */
   .btn-accent{
-    background:var(--accent);
-    color:#fff;
+    background:var(--yellow);
+    color:var(--navy);
   }
-  .btn-accent:hover:not(:disabled){ background:var(--accent-hover); }
-  button:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn-accent:hover:not(:disabled){ background:var(--navy); color:#fff; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  /* Geen getint geel bij disabled: neutraal navy-10 in plaats daarvan */
+  .btn-accent:disabled{ opacity:1; background:var(--navy-10); color:var(--navy-50); }
 
-  /* Output card */
+  /* ---------- Resultaatkaart ---------- */
   .terminal-toolbar{
     display:flex; align-items:center; justify-content:space-between;
-    padding:1rem 1.4rem;
+    padding:1.05rem 1.4rem;
     border-bottom:1px solid var(--divider);
     flex-wrap:wrap; gap:.6rem;
   }
   .current-file{ min-width:0; }
   .current-file-name{
-    font-family:var(--font-mono); font-size:.83rem; color:var(--ink);
+    font-size:.86rem; color:var(--ink);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; max-width:320px;
     font-weight:500;
+    margin-bottom:.15rem;
   }
   .stats{
-    font-family:var(--font-mono);
     font-size:.72rem;
     color:var(--ink-soft);
   }
@@ -266,25 +303,27 @@
     resize:none;
     border:none;
     outline:none;
-    background:var(--surface-alt);
+    background:var(--menu-2);
     color:var(--ink);
     font-family:var(--font-mono);
-    font-size:.87rem;
-    line-height:1.7;
+    font-size:.84rem;
+    line-height:1.75;
     padding:1.4rem 1.5rem;
     tab-size:2;
   }
-  .output::placeholder{ color:var(--ink-soft); font-family:var(--font-sans); font-size:.95rem; }
-  .output.error-text{ color:var(--error); }
+  .output::placeholder{ color:var(--navy-50); font-family:var(--font-sans); font-size:.9rem; }
+  .output.error-text{ color:var(--red); }
 
   footer{
     text-align:center;
     color:var(--ink-soft);
-    font-size:.8rem;
+    font-size:.76rem;
     padding-bottom:2.2rem;
   }
 
   @media (max-width:900px){
+    .masthead{ padding:2.6rem 1.2rem 1.8rem; }
+    .square-grid{ display:none; }
     .workspace{ flex-direction:column; padding:0 1.2rem; }
     .card-upload, .card-output{ height:auto; }
     .card-upload{ flex:none; }
@@ -292,14 +331,23 @@
     .output{ min-height:340px; }
     .current-file-name{ max-width:160px; }
   }
+  @media (prefers-reduced-motion:reduce){
+    *{ transition:none !important; }
+    .dot.busy{ animation:none; }
+  }
 </style>
 </head>
 <body>
 
   <header class="masthead">
-    <span class="badge">Lokaal &amp; privé verwerkt</span>
-    <h1>PDF <span class="arrow">→</span> Markdown <span class="arrow">→</span> Word</h1>
-    <p class="tagline">Sleep één of meerdere PDF's of Markdown-bestanden hierheen, kies je uitvoerformaat. Alles gebeurt in je browser — er wordt niets geüpload naar een server.</p>
+    <div class="masthead-text">
+      <span class="highlight">Lokaal &amp; privé verwerkt</span>
+      <h1>PDF <span class="arrow">→</span> Markdown <span class="arrow">→</span> Word</h1>
+      <p class="tagline">Sleep één of meerdere PDF's of Markdown-bestanden hierheen, kies je uitvoerformaat. Alles gebeurt in je browser — er wordt niets geüpload naar een server.</p>
+    </div>
+    <!-- Savills square grid (brand §08). Wil je het officiële logo tonen? Vervang dit blok door
+         <img src="savills-logo.png" alt="Savills" width="72" height="72"> — het logo nooit zelf namaken. -->
+    <div class="square-grid" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
   </header>
 
   <main class="workspace">
